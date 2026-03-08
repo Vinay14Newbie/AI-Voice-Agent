@@ -1,28 +1,33 @@
-// this file defines the main agent logic. It uses the OpenAI API to generate responses based on user input and the defined tools. The agent can call tools to perform specific actions, and then use the results of those tools to generate a final response for the user. The agent is designed to handle conversations related to booking and managing doctor appointments.
+// This file defines the main logic for the AI agent that manages doctor appointments. The runAgent function takes a user message and a session ID as input, retrieves the conversation history for that session, and interacts with the OpenAI API to generate responses. If the response includes tool calls, it executes the specified tools and incorporates their results into the conversation before generating a final response. The conversation history is saved back to the memory service after each interaction to maintain context for future messages in the same session.
 
 import OpenAI from "openai";
 import { tools } from "./tools.js";
 import { executeTool } from "./executor.js";
 import { OPENAI_API_KEY } from "../config/serverConfig.js";
+import {
+  getConversationService,
+  saveConversationService,
+} from "../services/memoryService.js";
 
 const openai = new OpenAI({
   apiKey: OPENAI_API_KEY,
 });
 
-export async function runAgent(userMessage) {
-  let messages = [
-    {
-      role: "system",
-      content:
-        "You are a helpful medical assistant that books and manages doctor appointments.",
-    },
-    {
-      role: "user",
-      content: userMessage,
-    },
-  ];
+export async function runAgent(userMessage, sessionId) {
+  let messages = await getConversationService(sessionId);
 
-  // First model response
+  if (messages.length === 0) {
+    messages.push({
+      role: "system",
+      content: "You are a helpful assistant that manages doctor appointments.",
+    });
+  }
+
+  messages.push({
+    role: "user",
+    content: userMessage,
+  });
+
   const response = await openai.chat.completions.create({
     model: "gpt-4.1",
     messages,
@@ -31,7 +36,6 @@ export async function runAgent(userMessage) {
 
   const message = response.choices[0].message;
 
-  // Check if the model wants to call a tool
   if (message.tool_calls) {
     const toolCall = message.tool_calls[0];
 
@@ -39,10 +43,8 @@ export async function runAgent(userMessage) {
 
     const args = JSON.parse(toolCall.function.arguments);
 
-    // Execute backend function
     const result = await executeTool(toolName, args);
 
-    // Add tool response to conversation
     messages.push(message);
 
     messages.push({
@@ -51,14 +53,23 @@ export async function runAgent(userMessage) {
       content: JSON.stringify(result),
     });
 
-    // Second model response (final answer)
     const finalResponse = await openai.chat.completions.create({
       model: "gpt-4.1",
       messages,
     });
 
-    return finalResponse.choices[0].message.content;
+    const reply = finalResponse.choices[0].message;
+
+    messages.push(reply);
+
+    await saveConversationService(sessionId, messages);
+
+    return reply.content;
   }
+
+  messages.push(message);
+
+  await saveConversationService(sessionId, messages);
 
   return message.content;
 }
