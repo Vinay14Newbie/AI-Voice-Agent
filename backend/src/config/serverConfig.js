@@ -11,3 +11,5 @@ export const ELEVENLABS_API_KEY = process.env.ELEVEN_LABS_API_KEY;
 export const DATABASE_URL = process.env.DATABASE_URL;
 
 export const REDIS_URL = process.env.REDIS_URL;
+
+export const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY;
