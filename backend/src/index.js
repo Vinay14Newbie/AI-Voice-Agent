@@ -4,11 +4,14 @@ import { Server } from "socket.io";
 import dotenv from "dotenv";
 import cors from "cors";
 import apiRouter from "./routes/apiRouter.js";
+import { startSocketServer } from "./utils/socketServer.js";
 
 dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
+
+startSocketServer(server);
 
 const io = new Server(server, {
   cors: {
